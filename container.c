@@ -132,7 +132,7 @@ int container_exec(void* arg) {
   change_root(merged);
 
   // TODO: use `execvp` to run the given command and return its return value
-  printf("Executing command...\n");
+  // printf("Executing command...\n");
   if (execvp(container->cmd[0], container->cmd) < 0) {
     err(1, "Failed to execute cummand");
   }
