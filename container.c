@@ -1,3 +1,22 @@
+// clang-format off
+/*********************************************************************************
+ * Joey Ma
+ * 2023 Spring CSE130 project4
+ * container.c
+ * entry file for container
+ *
+ * Notes:
+ * - Not tested on windows
+ *
+ * Usage:
+ * sudo ./container [ID] [IMAGE] [CMD]...
+ *
+ * Citations:
+ * - Dongjing tutor
+ * - Rohan tutor
+ *
+ *********************************************************************************/
+
 #define _GNU_SOURCE
 
 #include <err.h>
@@ -20,6 +39,9 @@
 typedef struct container {
   char id[CONTAINER_ID_MAX];
   // TODO: Add fields
+  char image[PATH_MAX];
+  char** cmd;
+  char cwd[PATH_MAX];
 } container_t;
 
 /**
@@ -43,6 +65,8 @@ int container_exec(void* arg) {
     err(1, "mount / private");
   }
 
+  //printf("Creating overlay filesystem...\n");
+
   // TODO: Create a overlay filesystem
   // `lowerdir`  should be the image directory: ${cwd}/images/${image}
   // `upperdir`  should be `/tmp/container/{id}/upper`
@@ -52,10 +76,67 @@ int container_exec(void* arg) {
   // call `mount("overlay", merged, "overlay", MS_RELATIME,
   //    lowerdir={lowerdir},upperdir={upperdir},workdir={workdir})`
 
+  // overlayFS directory paths --------------------------------------------------
+  char lowerdir[PATH_MAX]; // base image directory path for the container filesystem
+  char upperdir[PATH_MAX]; // directory where changes to the filesystem will be written
+  char workdir[PATH_MAX]; // working directory for the overlay filrsystem
+  char merged[PATH_MAX]; // directory that will present the merged view of the filesystem
+  
+  // Constructors ---------------------------------------------------------------
+  sprintf(lowerdir, "%s/images/%s", container->cwd, container->image);
+  sprintf(upperdir, "/tmp/container/%s/upper", container->id);
+  sprintf(workdir, "/tmp/container/%s/work", container->id);
+  sprintf(merged, "/tmp/container/%s/merged", container->id);
+
+  char* dirs[] = {lowerdir, upperdir, workdir, merged}; // array of dir paths needed to be created
+  for (int i = 0; i < (int)(sizeof(dirs)/sizeof(char*)); ++i) { // loop through everything in dirs arr
+    char* dir = dirs[i]; // get current dir path
+    char* tmp_str = strdup(dir); // mutable copy of dir path
+
+    for (char* p = tmp_str + 1; *p; p++) { // loop through each character in dir path
+      if (*p == '/') { // if current character is '/' that means a subdirectory
+        *p = '\0'; // temporarily end the string sitting here to isolate subdir
+        if (mkdir(tmp_str, S_IRWXU) != 0 && errno != EEXIST) { // permission mod S_IRWXU-try to create subdir; if exists, then ignore error
+          perror("mkdir error");
+          return -1;
+        }
+        *p = '/'; // restore '/' in the directory path before continuing
+      }
+    } // proceed below after all subdirs created -------------------
+
+    if (mkdir(tmp_str, S_IRWXU) != 0 && errno != EEXIST) { // create the final dir in the path
+      perror("mkdir error");
+      return -1;
+    }
+
+    struct stat st = {0}; // check if final dir exists
+    if (stat(tmp_str, &st) == -1) {
+      printf("%s does not exist\n", tmp_str);
+      return -1;
+    }
+
+    free(tmp_str); // free temp mutable copy of dir path
+  }
+  
+  char options[PATH_MAX]; // construct options string for overlayFS
+  sprintf(options, "lowerdir=%s,upperdir=%s,workdir=%s", lowerdir, upperdir, workdir);
+
+  //printf("Mounting overlay filesystem with options: %s\n", options);
+
+  if (mount("overlay", merged, "overlay", MS_RELATIME, options) < 0) {
+    err(1, "Failed to mount overlay filesystem");
+  }
+
   // TODO: Call `change_root` with the `merged` directory
-  // change_root(merged)
+  //printf("Changing root...\n");
+  change_root(merged);
 
   // TODO: use `execvp` to run the given command and return its return value
+  printf("Executing command...\n");
+  if (execvp(container->cmd[0], container->cmd) < 0) {
+    err(1, "Failed to execute cummand");
+  }
+
   return 0;
 }
 
@@ -80,10 +161,12 @@ int main(int argc, char** argv) {
   char cwd[PATH_MAX];
   getcwd(cwd, PATH_MAX);
 
+  // TODO: store all necessary information to `container`
   container_t container;
   strncpy(container.id, argv[1], CONTAINER_ID_MAX);
-
-  // TODO: store all necessary information to `container`
+  strncpy(container.image, argv[2], PATH_MAX);
+  container.cmd = argv + 3;
+  getcwd(container.cwd, PATH_MAX); // store cwd in container
 
   /* Use `clone` to create a child process */
   char child_stack[CHILD_STACK_SIZE];  // statically allocate stack for child
