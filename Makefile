@@ -6,6 +6,7 @@ OBJECTS=container.o change_root.o
 
 .PHONY: all
 all: $(TARGET)
+	./container
 
 $(TARGET): $(OBJECTS)
 	$(CC) $(CFLAGS) -o $(TARGET) $(OBJECTS)
