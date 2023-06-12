@@ -98,24 +98,29 @@ int container_exec(void* arg) {
        ++i) {                     // loop through everything in dirs arr
     char* dir = dirs[i];          // get current dir path
     char* tmp_str = strdup(dir);  // mutable copy of dir path
+    char* err_msg;                // temp error message
 
     for (char* p = tmp_str + 1; *p;
          p++) {         // loop through each character in dir path
       if (*p == '/') {  // if current character is '/' that means a subdirectory
         *p = '\0';  // temporarily end the string sitting here to isolate subdir
-        if (mkdir(tmp_str, S_IRWXU) != 0 &&
-            errno != EEXIST) {  // permission mod S_IRWXU-try to create subdir;
+        if (mkdir(tmp_str, 0700) != 0 &&
+            errno != EEXIST) {  // permission mod 700-try to create subdir;
                                 // if exists, then ignore error
-          perror("mkdir error");
+          asprintf(&err_msg, "Error creating directory %s", tmp_str);
+          perror(err_msg);
+          free(err_msg);
           return -1;
         }
         *p = '/';  // restore '/' in the directory path before continuing
       }
     }  // proceed below after all subdirs created -------------------
 
-    if (mkdir(tmp_str, S_IRWXU) != 0 &&
+    if (mkdir(tmp_str, 0700) != 0 &&
         errno != EEXIST) {  // create the final dir in the path
-      perror("mkdir error");
+      asprintf(&err_msg, "Error creating directory %s", tmp_str);
+      perror(err_msg);
+      free(err_msg);
       return -1;
     }
 
